@@ -1,7 +1,7 @@
 [project]
 name = "opc-cli"
 version = "0.1.0"
-description = "CLI for managing OpenCode sessions"
+description = "A fast, zero-config CLI for managing OpenCode sessions"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
