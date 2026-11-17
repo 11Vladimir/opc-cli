@@ -4,6 +4,7 @@
 ![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)
 ![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
+![CI](https://github.com/11Vladimir/opc-cli/actions/workflows/ci.yml/badge.svg)
 
 A fast, zero-configuration terminal CLI for inspecting and managing [OpenCode](https://opencode.ai) sessions, rendered with [Rich](https://github.com/Textualize/rich).
 
@@ -24,6 +25,7 @@ running, with no schema coupling and no risk of corrupting `opencode.db`.
 - **Session editing** — `opc rename` fixes unhelpful auto-titles, `opc mv` repoints sessions after a folder rename, `opc fork` branches a conversation, and `opc export` writes Markdown or lossless JSON.
 - **Archive workflow** — `opc archive` / `opc unarchive` hide sessions without deleting them; `opc ls -a` shows them with an `a` marker.
 - **Project awareness** — `opc projects` maps project IDs to directories, and `ls`/`stats` accept `-p/--project` with an id, id prefix, or path.
+- **Scriptable** — `-j/--json` on `ls`, `show`, `stats`, `limits`, `projects`, and `export` emits raw JSON for `jq` and scripts.
 
 ## Safe by design
 
@@ -43,15 +45,15 @@ Concretely:
 
 - **No direct SQLite access** — no schema coupling, no migration breakage, no
   risk of corrupting the database.
-- **Safe while OpenCode is running** — you can list or delete sessions while the
-  TUI, Zed, or another client is attached; the service serialises writes and
-  every client sees the change immediately.
+- **Safe while OpenCode is running** — you can list, archive, rename, or delete
+  sessions while the TUI, Zed, or another client is attached; the service
+  serialises writes and every client sees the change immediately.
 - **Same permissions as OpenCode** — `opc` authenticates with the ephemeral
   password from `service.json`; it cannot do anything the service itself would
   not allow.
-- **Read-only by default** — `ls`, `show`, `stats`, and `limits` only issue
-  `GET` requests; destructive commands (`rm`, `clean`) resolve every prefix
-  first, show what will be affected, and ask for confirmation.
+- **Read-only by default** — `ls`, `show`, `stats`, `limits`, and `projects`
+  only issue `GET` requests; destructive commands (`rm`, `clean`) resolve every
+  prefix first, show what will be affected, and ask for confirmation.
 
 The only local reads are the service registration file and the `opencode`
 binary path used by `opc resume`. Nothing else on disk is modified.
@@ -353,13 +355,16 @@ Global options:
 
 ## Machine-readable output
 
-`ls`, `stats`, and `limits` accept `-j / --json` and print raw JSON to stdout
-instead of Rich tables, so output can be piped into `jq` or scripts:
+`ls`, `show`, `stats`, `limits`, `projects`, and `export` accept `-j / --json`
+and print raw JSON to stdout instead of Rich tables, so output can be piped
+into `jq` or scripts:
 
 ```sh
 opc ls -j | jq '.sessions[].title'
+opc show -j ses_e2b0571a | jq '.messages | length'
 opc limits -j | jq '.go.monthly.percent'
 opc stats -j | jq '.stats.models | length'
+opc projects -j | jq -r '.[].canonical'
 ```
 
 Each command emits a stable shape:
@@ -371,6 +376,7 @@ Each command emits a stable shape:
 | `opc limits -j` | `{"workspace": {...}, "go": {...}, "budgets": [...]}` |
 | `opc projects -j` | `[{"id": ..., "canonical": ..., "sessions": <int\|null>}...]` |
 | `opc stats -j` | `{"stats": {...}, "limits": {...} \| null}` |
+| `opc export -j` | `{"info": {...}, "messages": [...]}` |
 
 JSON is written with `orjson` and no ANSI escapes, so it is safe to redirect
 (`opc ls -j > sessions.json`).
@@ -418,6 +424,10 @@ actually appear in the current output:
 
 ```text
 opc-cli/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml        # PR checks + required CI gate
+│       └── release.yml   # tag push → GitHub release
 ├── pyproject.toml
 ├── src/opc_cli/
 │   ├── __init__.py
@@ -426,7 +436,7 @@ opc-cli/
 │   ├── helpers.py        # JSON output, date parsing, bulk progress
 │   ├── cli.py            # Entry point: --version, command imports, error handling
 │   ├── commands/
-│   │   ├── sessions.py   # ls, show, rm, clean, resume, fork, archive, rename, mv
+│   │   ├── sessions.py   # ls, show, rm, clean, resume, fork, archive, unarchive, rename, mv
 │   │   ├── stats.py      # stats, limits, projects
 │   │   └── export.py     # export (single session and --all)
 │   ├── client/
