@@ -77,7 +77,7 @@ binary path used by `opc resume`. Nothing else on disk is modified.
 Install globally as the `opc` command with `uv`:
 
 ```sh
-git clone <your-repo-url>
+git clone https://github.com/11Vladimir/opc-cli.git
 cd opc-cli
 uv tool install --editable .
 ```
