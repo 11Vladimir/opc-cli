@@ -1,0 +1,95 @@
+name: CI
+
+# Runs only for pull requests targeting main. Direct pushes do not trigger CI.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            code:
+              - "**"
+              - "!**/*.md"
+              - "!docs/**"
+              - "!LICENSE"
+              - "!.gitignore"
+
+  checks:
+    name: lint, types, tests, build
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Check formatting
+        run: uv run ruff format --check
+
+      - name: Type check
+        run: uvx --from ty==0.0.104 ty check
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      - name: Build package
+        run: uv build
+
+      - name: Smoke-test the built wheel
+        run: uvx --from "$(ls dist/*.whl | head -n 1)" opc --version
+
+  gate:
+    name: CI gate
+    needs: [changes, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # A skipped job reports "success" on GitHub, even when it was skipped
+      # because its dependency failed. This required check therefore inspects
+      # the real results itself, so neither a failed test run nor a failed
+      # change-detection step can pass the gate.
+      - name: Verify checks result
+        run: |
+          failed=0
+          for result in "${{ needs.changes.result }}" "${{ needs.checks.result }}"; do
+            echo "result: $result"
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              failed=1
+            fi
+          done
+          exit "$failed"

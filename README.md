@@ -484,8 +484,45 @@ uv run pytest               # test suite
 uvx ty check                # optional static types (Astral ty)
 ```
 
-All four are expected to pass. `ty check` is optional because `ty` is still
-pre-1.0, but it is what the maintainer's editor runs, so please keep it clean.
+All four are expected to pass. CI runs on pull requests targeting `main` only
+(direct pushes do not trigger it), plus `uv build` and a smoke test that runs
+`opc --version` from the built wheel.
+
+Two cost-saving rules:
+
+- pull requests touching only Markdown/docs skip the heavy job, while the
+  required **CI gate** check still reports green;
+- draft pull requests are skipped until they are marked ready for review.
+
+### Releasing
+
+PyPI publishing is intentionally deferred; releases are GitHub tags.
+
+```sh
+# 1. bump the version in pyproject.toml only (opc reads it from package metadata)
+# 2. merge that change to main through a pull request
+# 3. tag the commit on main and push the tag
+git tag -a v0.2.0 -m "v0.2.0"        # or: git tag -s v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+```
+
+Pushing the tag starts `.github/workflows/release.yml`, which:
+
+- fails if the tag (`v0.2.0`) does not match `pyproject.toml` (`0.2.0`);
+- runs `ruff` and the test suite;
+- builds the sdist and wheel and smoke-tests the wheel;
+- creates the GitHub release with generated notes and both artifacts attached.
+
+Manual fallback, if the workflow is unavailable:
+
+```sh
+uv build
+uvx --from "$(ls dist/*.whl | head -n 1)" opc --version
+gh release create v0.2.0 dist/* --title v0.2.0 --generate-notes
+```
+
+When PyPI is enabled later, the release workflow only needs an extra
+`uv publish` step (the hook is already commented in `release.yml`).
 
 ### Architecture rules
 
